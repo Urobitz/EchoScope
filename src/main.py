@@ -1,134 +1,55 @@
 import requests 
-import jsonschema
-from jsonschema import validate
 import sqlite3
+from steam_client import get_reviews
 
+def user_init():
 
-def init_db():
-    db = sqlite3.connect("EchoScope.db")
-    cursor = db.cursor()
+    print("Welcome to EchoScope")
+    review_limit = int(input("1.Enter desired amount of reviews: "))
+    appID = input("2. Enter game appID: ")
 
+    return review_limit, appID
 
-    return db,cursor
+def init_parameters(appID): 
 
-
-def get_reviews(url,params,data,limit,db, cursor): #Temporal prototype 
-
-    current_params = params
-    how_many_reviews = 0
-    counter = 0
-
-    for _ in range(3): 
-        reviews = [block["review"] for block in data["response"]["reviews"]]
-        formatted_reviews = [(review,) for review in reviews]
-        cursor.executemany('INSERT INTO reviews (review_text) VALUES (?)', formatted_reviews)
-        current_params['cursor'] = data['response']['cursor']
-        r = requests.get(url, params=current_params)
-        data = r.json()
-
-    cursor.execute('SELECT * FROM reviews')
-    rows = cursor.fetchall()
-
-    
-    print("--- DATABASE CONTENTS ---")
-    for row in rows:
-        print(row)
-
-
-    '''#TEST
-    reviews = [block["review"] for block in data["response"]["reviews"]]
-    print(len(reviews))
-
-    current_params['cursor'] = data['response']['cursor']
-    r = requests.get(url, params=current_params)
-    data = r.json()
-
-    reviews.append([block["review"] for block in data["response"]["reviews"]])
-    print(len(reviews))'''
-
-
-
-
-    '''
-for _ in range(int(limit / current_params["num_per_page"])): 
-
-
-
-
-        if(counter == current_params["num_per_page"]): #if the counter reaches the upper limit, scroll to next page
-            current_params['cursor'] = data["response"]["cursor"] #Scroll to next page
-            r = requests.get(url, params=current_params) #make the new request
-            data = r.json() 
-            counter = 0 #Reset counter to again count to upper limit
-        try:
-            print(data['response']['reviews'][counter]['review'])
-            how_many_reviews += 1
-            
-        except IndexError: 
-            print("No more reviews to load...")
-            return
-        counter += 1
-
-    print(f"There were {how_many_reviews} reviews")
-'''
-
-
-
-def verify_Json(data):
-    schema = {
-        "type" : "object",
-        "properties" : {
-            "response" : {
-                "type" : "object",
-                "properties" : {
-                    "reviews" : {
-                        "type" : "array",
-                        "items" : {
-                            "type" : "object",
-                            "properties" : {
-                                "review": {"type": "string"}
-                            },
-                            "required" : ["review"]
-                        }
-                    }
-                },
-                "required" : ["reviews"]
-            }
-        },
-        "required" : ["response"]
+    params = {
+        "num_per_page" : 100, #Assume maximum for now
+        "appID" : appID,
+        "cursor" : "*", #Start at first page
+        "day_range" : 365
     }
 
-    try:
-        validate(instance=data, schema=schema)
-        return True
-    except jsonschema.exceptions.ValidationError as e:
-        return False
+    return params
 
-def init(url,params,responses,db,cursor):
-    try:
-        r = requests.get(url=url, params=params)
-        r.raise_for_status()
-        data = r.json()
-        if not verify_Json(data): 
-            raise ValueError("Invalid API response")
-        get_reviews(url,params,data,responses,db, cursor)
-    except requests.exceptions.RequestException as e: #Raise error if anything happens to the request
-        print("EchoScope failed to initialize...")
+def init_database():
+    db_connection = sqlite3.connect("reviews.db") 
+    db_cursor = db_connection.cursor()
+
+    db_cursor.execute(""" 
+        CREATE TABLE IF NOT EXISTs reviews(
+            review_id TEXT PRIMARY KEY,
+            app_id INTEGER NOT NULL,
+            review_text TEXT NOT NULL,
+            voted_up INTEGER NOT NULL,
+            playtime_at_review INTEGER,
+            playtime_forever INTEGER,
+            received_for_free INTEGER)""")
+
+    return db_connection,db_cursor
+
+def init():
+
+    url = "https://api.steampowered.com/IUserReviewsService/GetAppReviews/v1/"
+    review_limit, appID = user_init()
+    params = init_parameters(appID)
+    db_connection, db_cursor = init_database()
+
+
+    get_reviews(url, params, db_cursor, review_limit,appID, db_connection)
     
+init()
 
 
-url = "https://api.steampowered.com/IUserReviewsService/GetAppReviews/v1/"
-responses = 5000
-
-params = {
-    "appid" : 3241660,
-    "num_per_page" : 100,
-    "day_range" : 365, 
-    "cursor" : '*',
-    "use_review_quality" : True
-}
-db, cursor = init_db()
-init(url, params,responses,db,cursor)
 
 
 
