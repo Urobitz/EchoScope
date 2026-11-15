@@ -1,6 +1,7 @@
 import requests
 import sqlite3
 from steam_client import get_reviews
+from review_analysis import get_review_mean
 
 
 class DatabaseContext:
@@ -119,6 +120,8 @@ def init():
     database = DatabaseContext(db_connection, db_cursor)
 
     get_reviews(url, instance, database)
+
+    print(get_review_mean(database))
 
 
 init()
