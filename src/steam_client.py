@@ -1,6 +1,5 @@
 import requests
 import math
-import json
 from math import ceil
 from validators import verify_Json
 
